@@ -1,33 +1,55 @@
+/**
+ * Login Component
+ * Menampilkan form login untuk user/admin
+ * Validasi: email format dan password minimal 6 karakter
+ * Fitur: Login, navigasi ke Register
+ */
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Login.css';
 import apiService from './services/apiService';
 
+/**
+ * Login - Komponen form login
+ * @returns {JSX.Element} Form login dengan validasi dan error handling
+ */
 function Login() {
   const navigate = useNavigate();
+  // State untuk email input
   const [email, setEmail] = useState('');
+  // State untuk password input
   const [password, setPassword] = useState('');
+  // State untuk error message
   const [error, setError] = useState('');
+  // State untuk loading state saat submit
   const [loading, setLoading] = useState(false);
 
+  /**
+   * handleSubmit - Menangani form submission untuk login
+   * Melakukan validasi input sebelum mengirim ke backend
+   * @param {Event} e - Form submission event
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Validasi
+    // Validasi: Email dan password tidak boleh kosong
     if (!email || !password) {
       setError('Email dan password harus diisi');
       setLoading(false);
       return;
     }
 
+    // Validasi: Format email harus valid
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Email tidak valid');
       setLoading(false);
       return;
     }
 
+    // Validasi: Password minimal 6 karakter
     if (password.length < 6) {
       setError('Password minimal 6 karakter');
       setLoading(false);
@@ -35,18 +57,19 @@ function Login() {
     }
 
     try {
-      // Login ke backend
+      // Kirim login request ke backend
       const response = await apiService.login(email, password);
       
-      // Simpan token
+      // Simpan token autentikasi (access token dan refresh token)
       apiService.setToken(response.token, response.refreshToken);
       
-      // Simpan user info
+      // Simpan informasi user di localStorage untuk referensi UI
       localStorage.setItem('user', JSON.stringify(response.user));
       
-      // Redirect ke dashboard
+      // Redirect ke halaman dashboard setelah login berhasil
       navigate('/dashboard');
     } catch (err) {
+      // Tampilkan error message jika login gagal
       setError(err.message || 'Login gagal');
     } finally {
       setLoading(false);
@@ -57,7 +80,7 @@ function Login() {
     <div className="login-container">
       <div className="login-box">
         <div className="login-header">
-          <h1>👕 Endro store</h1>
+          <h1>👕 Revandra Shop </h1>
           <p>Toko Pakaian Online</p>
         </div>
 
@@ -84,6 +107,7 @@ function Login() {
             />
           </div>
 
+          {/* Tampilkan error message jika ada validasi yang gagal */}
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={loading}>

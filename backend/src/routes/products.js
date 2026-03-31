@@ -12,6 +12,7 @@ const router = express.Router();
 const pool = require("../db/pool");
 const authenticateToken = require("../middleware/auth");
 const { requireRole } = require("../middleware/roles");
+const upload = require("../middleware/upload");
 
 /**
  * @swagger
@@ -105,6 +106,45 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
 /**
  * @swagger
+ * /products/upload:
+ *   post:
+ *     summary: Upload gambar untuk produk (hanya admin)
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Gambar berhasil diupload
+ *       400:
+ *         description: File tidak valid
+ */
+router.post("/upload", authenticateToken, requireRole("admin"), upload.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    
+    const imageUrl = `/uploads/${req.file.filename}`;
+    console.log('📷 [UPLOAD] Image uploaded:', imageUrl);
+    res.json({ message: "Image uploaded successfully", imageUrl: imageUrl });
+  } catch (error) {
+    console.error('❌ [UPLOAD] Error:', error.message);
+    res.status(500).json({ message: "Upload failed: " + error.message });
+  }
+});
+
+/**
+ * @swagger
  * /products:
  *   post:
  *     summary: Tambahkan produk baru (hanya admin)
@@ -126,6 +166,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
  *               name:
  *                 type: string
  *                 example: Jaket Denim
+ *               description:
+ *                 type: string
+ *                 example: Jaket denim berkualitas tinggi
  *               price:
  *                 type: number
  *                 example: 250000
@@ -135,6 +178,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
  *               category_id:
  *                 type: integer
  *                 example: 1
+ *               image:
+ *                 type: string
+ *                 example: /uploads/image-123456.png
  *     responses:
  *       201:
  *         description: Produk berhasil ditambahkan
@@ -145,20 +191,39 @@ router.get("/:id", authenticateToken, async (req, res) => {
  */
 router.post("/", authenticateToken, requireRole("admin"), async (req, res) => {
   try {
-    const { name, price, stock, category_id } = req.body;
-    if (!name || !price || !stock || !category_id) {
+    const { name, price, stock, category_id, description, image } = req.body;
+    if (!name || price === undefined || stock === undefined || !category_id) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    await pool.query(
-      "INSERT INTO products (name, price, stock, category_id) VALUES ($1, $2, $3, $4)",
-      [name, price, stock, category_id]
+    // Validate numeric values
+    const numPrice = parseFloat(price);
+    const numStock = parseInt(stock);
+    const numCategoryId = parseInt(category_id);
+    
+    if (isNaN(numPrice) || numPrice <= 0) {
+      return res.status(400).json({ message: "Price must be a positive number" });
+    }
+    
+    if (isNaN(numStock) || numStock < 0) {
+      return res.status(400).json({ message: "Stock must be a non-negative number" });
+    }
+    
+    if (isNaN(numCategoryId) || numCategoryId <= 0) {
+      return res.status(400).json({ message: "Invalid category_id" });
+    }
+
+    const result = await pool.query(
+      "INSERT INTO products (name, description, price, stock, category_id, image) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [name, description || '', numPrice, numStock, numCategoryId, image || null]
     );
 
-    res.status(201).json({ message: "Product added successfully" });
+    console.log('✅ [CREATE] Product created:', result.rows[0].id);
+    res.status(201).json({ message: "Product added successfully", product: result.rows[0] });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error('❌ [CREATE] Error:', error.message);
+    console.error('❌ [CREATE] Full error:', error.detail || error);
+    res.status(500).json({ message: "Server error: " + error.message });
   }
 });
 
@@ -188,6 +253,9 @@ router.post("/", authenticateToken, requireRole("admin"), async (req, res) => {
  *               name:
  *                 type: string
  *                 example: Kaos Lengan Panjang
+ *               description:
+ *                 type: string
+ *                 example: Kaos lengan panjang berkualitas premium
  *               price:
  *                 type: number
  *                 example: 90000
@@ -206,19 +274,34 @@ router.post("/", authenticateToken, requireRole("admin"), async (req, res) => {
 router.put("/:id", authenticateToken, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, category_id } = req.body;
+    const { name, price, stock, category_id, description, image } = req.body;
+
+    console.log('📝 [UPDATE] Product ID:', id);
+    console.log('📝 [UPDATE] Data:', { name, price, stock, category_id, description, image });
+
+    // Validate required fields
+    if (!name || price === undefined || stock === undefined || !category_id) {
+      console.log('❌ [UPDATE] Missing required fields');
+      return res.status(400).json({ 
+        message: "Missing required fields: name, price, stock, category_id" 
+      });
+    }
 
     const result = await pool.query(
-      "UPDATE products SET name=$1, price=$2, stock=$3, category_id=$4 WHERE id=$5",
-      [name, price, stock, category_id, id]
+      "UPDATE products SET name=$1, description=$2, price=$3, stock=$4, category_id=$5, image=$6, updated_at=CURRENT_TIMESTAMP WHERE id=$7 RETURNING *",
+      [name, description || '', price, stock, category_id, image || null, id]
     );
 
-    if (result.rowCount === 0) return res.status(404).json({ message: "Product not found" });
+    if (result.rowCount === 0) {
+      console.log('❌ [UPDATE] Product not found');
+      return res.status(404).json({ message: "Product not found" });
+    }
 
-    res.json({ message: "Product updated successfully" });
+    console.log('✅ [UPDATE] Product updated successfully');
+    res.json({ message: "Product updated successfully", product: result.rows[0] });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error('❌ [UPDATE] Error:', error.message);
+    res.status(500).json({ message: "Server error: " + error.message });
   }
 });
 
@@ -247,12 +330,28 @@ router.put("/:id", authenticateToken, requireRole("admin"), async (req, res) => 
 router.delete("/:id", authenticateToken, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('🗑 [DELETE] Deleting product ID:', id);
+    
     const result = await pool.query("DELETE FROM products WHERE id=$1", [id]);
-    if (result.rowCount === 0) return res.status(404).json({ message: "Product not found" });
+    
+    if (result.rowCount === 0) {
+      console.log('❌ [DELETE] Product not found');
+      return res.status(404).json({ message: "Product not found" });
+    }
+    
+    console.log('✅ [DELETE] Product deleted successfully');
     res.json({ message: "Product deleted successfully" });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error('❌ [DELETE] Error:', error.code, error.detail);
+    
+    // Foreign key constraint error
+    if (error.code === '23503') {
+      return res.status(400).json({ 
+        message: "Produk tidak bisa dihapus karena masih ada transaksi yang menggunakan produk ini. Hubungi admin untuk bantuan lebih lanjut." 
+      });
+    }
+    
+    res.status(500).json({ message: "Server error: " + error.message });
   }
 });
 

@@ -73,7 +73,7 @@ function Register() {
     <div className="register-container">
       <div className="register-box">
         <div className="register-header">
-          <h1>👕 Endro store</h1>
+          <h1>👕 Revandra Shop </h1>
           <p>Daftar Akun Baru</p>
         </div>
 

@@ -1,19 +1,38 @@
+/**
+ * Register Component
+ * Menampilkan form registrasi untuk membuat akun customer baru
+ * Validasi: nama minimal 3 karakter, email format valid, password minimal 6 karakter
+ * Fitur: Registrasi, validasi password match, navigasi ke Login
+ */
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Register.css';
 import apiService from './services/apiService';
 
+/**
+ * Register - Komponen form registrasi customer
+ * @returns {JSX.Element} Form registrasi dengan validasi lengkap
+ */
 function Register() {
   const navigate = useNavigate();
+  // State untuk form data (name, email, password, confirmPassword)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
+  // State untuk error message
   const [error, setError] = useState('');
+  // State untuk loading state saat submit
   const [loading, setLoading] = useState(false);
 
+  /**
+   * handleChange - Menangani perubahan input form
+   * Update state formData sesuai dengan input field yang berubah
+   * @param {Event} e - Input change event
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prevState => ({
@@ -22,36 +41,45 @@ function Register() {
     }));
   };
 
+  /**
+   * handleSubmit - Menangani form submission untuk registrasi
+   * Melakukan validasi input sebelum mengirim ke backend
+   * @param {Event} e - Form submission event
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Validation
+    // Validasi: Semua field harus diisi
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
       setError('Semua field harus diisi');
       setLoading(false);
       return;
     }
 
+    // Validasi: Nama minimal 3 karakter
     if (formData.name.length < 3) {
       setError('Nama minimal 3 karakter');
       setLoading(false);
       return;
     }
 
+    // Validasi: Format email harus valid
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       setError('Email tidak valid');
       setLoading(false);
       return;
     }
 
+    // Validasi: Password minimal 6 karakter
     if (formData.password.length < 6) {
       setError('Password minimal 6 karakter');
       setLoading(false);
       return;
     }
 
+    // Validasi: Password dan confirm password harus sama
     if (formData.password !== formData.confirmPassword) {
       setError('Password tidak cocok');
       setLoading(false);
@@ -59,13 +87,14 @@ function Register() {
     }
 
     try {
-      // Register ke backend
+      // Kirim registrasi request ke backend
       await apiService.register(formData.name, formData.email, formData.password);
       
-      // Redirect ke login dengan pesan sukses
+      // Tampilkan alert sukses dan redirect ke login
       alert('Registrasi berhasil! Silakan login dengan email Anda');
       navigate('/');
     } catch (err) {
+      // Tampilkan error message jika registrasi gagal
       setError(err.message || 'Registrasi gagal');
     } finally {
       setLoading(false);
@@ -76,7 +105,7 @@ function Register() {
     <div className="register-container">
       <div className="register-box">
         <div className="register-header">
-          <h1>👕 Endro store</h1>
+          <h1>👕 Revandra Shop </h1>
           <p>Daftar Akun Baru</p>
         </div>
 
@@ -129,6 +158,7 @@ function Register() {
             />
           </div>
 
+          {/* Tampilkan error message jika ada validasi yang gagal */}
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="register-btn" disabled={loading}>

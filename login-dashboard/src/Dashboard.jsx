@@ -13,6 +13,16 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [checkoutModal, setCheckoutModal] = useState({ show: false, status: null, transactionId: null, message: '' });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [editFormData, setEditFormData] = useState({ name: '', price: '', stock: '', category_id: '', description: '', image: '' });
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createFormData, setCreateFormData] = useState({ name: '', price: '', stock: '', category_id: '', description: '', image: '' });
+  const [createImagePreview, setCreateImagePreview] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -48,6 +58,16 @@ function Dashboard() {
           setUserRole(user.role);
         }
 
+        // Fetch categories
+        try {
+          const categoriesData = await apiService.getCategories();
+          if (categoriesData && Array.isArray(categoriesData)) {
+            setCategories(categoriesData);
+          }
+        } catch (err) {
+          console.warn('Gagal mengambil kategori:', err);
+        }
+
         // Fetch products (untuk semua role)
         const productsData = await apiService.getProducts();
         if (productsData && Array.isArray(productsData)) {
@@ -56,9 +76,10 @@ function Dashboard() {
             name: product.name,
             price: parseFloat(product.price),
             category: product.category_name || 'Uncategorized',
-            image: `/${imageMap[product.name] || product.name + '.png'}`,
+            image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
             stock: product.stock,
-            description: product.description
+            description: product.description,
+            category_id: product.category_id
           }));
           setProducts(mappedProducts);
         }
@@ -214,6 +235,218 @@ function Dashboard() {
   ];
   */
 
+  // Handle edit product button click
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setEditFormData({
+      name: product.name,
+      price: product.price.toString(),
+      stock: product.stock.toString(),
+      category_id: product.category_id || '',
+      description: product.description || '',
+      image: product.image || ''
+    });
+    setEditImagePreview(null);
+    setShowEditModal(true);
+  };
+
+  // Handle update product
+  const handleUpdateProduct = async () => {
+    if (!editingProduct) return;
+    
+    if (!editFormData.name || !editFormData.price || !editFormData.stock || !editFormData.category_id) {
+      alert('Nama, harga, stok, dan kategori harus diisi!');
+      return;
+    }
+
+    try {
+      console.log('📝 [UPDATE] Updating product:', editingProduct.id);
+      let imageUrl = editFormData.image;
+
+      // Upload image if new file is selected
+      if (editFormData.image && editFormData.image instanceof File) {
+        setUploadingImage(true);
+        try {
+          const uploadResponse = await apiService.uploadImage(editFormData.image);
+          imageUrl = uploadResponse.imageUrl;
+          console.log('📷 [UPDATE] Image uploaded:', imageUrl);
+        } catch (uploadErr) {
+          console.error('📷 [UPDATE] Upload error:', uploadErr);
+          alert('Gagal mengupload gambar: ' + uploadErr.message);
+          setUploadingImage(false);
+          return;
+        }
+        setUploadingImage(false);
+      }
+
+      const payload = {
+        name: editFormData.name,
+        price: parseFloat(editFormData.price),
+        stock: parseInt(editFormData.stock),
+        category_id: parseInt(editFormData.category_id),
+        description: editFormData.description || '',
+        image: imageUrl
+      };
+      console.log('📝 [UPDATE] Payload:', payload);
+
+      const response = await apiService.updateProduct(editingProduct.id, payload);
+      console.log('📝 [UPDATE] Response:', response);
+      
+      // Refresh products list
+      const productsData = await apiService.getProducts();
+      if (productsData && Array.isArray(productsData)) {
+        const mappedProducts = productsData.map(product => ({
+          id: product.id,
+          name: product.name,
+          price: parseFloat(product.price),
+          category: product.category_name || 'Uncategorized',
+          image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
+          stock: product.stock,
+          description: product.description,
+          category_id: product.category_id
+        }));
+        setProducts(mappedProducts);
+      }
+
+      setShowEditModal(false);
+      setEditingProduct(null);
+      setEditImagePreview(null);
+      alert('Produk berhasil diperbarui!');
+    } catch (err) {
+      console.error('Error updating product:', err);
+      alert('Gagal memperbarui produk: ' + (err.message || 'Error'));
+    }
+  };
+
+  // Handle delete product
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus produk ini?')) {
+      return;
+    }
+
+    try {
+      console.log('🗑 [DELETE] Deleting product ID:', productId);
+      await apiService.deleteProduct(productId);
+      console.log('✅ [DELETE] Product deleted successfully');
+      
+      // Refresh products list
+      const productsData = await apiService.getProducts();
+      if (productsData && Array.isArray(productsData)) {
+        const mappedProducts = productsData.map(product => ({
+          id: product.id,
+          name: product.name,
+          price: parseFloat(product.price),
+          category: product.category_name || 'Uncategorized',
+          image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
+          stock: product.stock,
+          description: product.description,
+          category_id: product.category_id
+        }));
+        setProducts(mappedProducts);
+      }
+
+      alert('Produk berhasil dihapus!');
+    } catch (err) {
+      console.error('❌ [DELETE] Error:', err);
+      const errorMsg = err.message || 'Error tidak diketahui';
+      alert('Gagal menghapus produk:\n\n' + errorMsg);
+    }
+  };
+
+  // Handle create product button click
+  const handleOpenCreateModal = () => {
+    setCreateFormData({ name: '', price: '', stock: '', category_id: '', description: '', image: '' });
+    setCreateImagePreview(null);
+    setShowCreateModal(true);
+  };
+
+  // Handle create product
+  const handleCreateProduct = async () => {
+    if (!createFormData.name || !createFormData.price || !createFormData.stock || !createFormData.category_id) {
+      alert('Nama, harga, stok, dan kategori harus diisi!');
+      return;
+    }
+
+    // Validate numeric inputs
+    const price = parseFloat(createFormData.price);
+    const stock = parseInt(createFormData.stock);
+    const categoryId = parseInt(createFormData.category_id);
+    
+    if (isNaN(price) || price <= 0) {
+      alert('Harga harus berupa angka positif!');
+      return;
+    }
+    
+    if (isNaN(stock) || stock < 0) {
+      alert('Stok harus berupa angka positif!');
+      return;
+    }
+    
+    if (isNaN(categoryId) || categoryId <= 0) {
+      alert('Kategori tidak valid!');
+      return;
+    }
+
+    try {
+      console.log('➕ [CREATE] Creating product...');
+      let imageUrl = null;
+
+      // Upload image if file is selected
+      if (createFormData.image && createFormData.image instanceof File) {
+        setUploadingImage(true);
+        try {
+          const uploadResponse = await apiService.uploadImage(createFormData.image);
+          imageUrl = uploadResponse.imageUrl;
+          console.log('📷 [CREATE] Image uploaded:', imageUrl);
+        } catch (uploadErr) {
+          console.error('📷 [CREATE] Upload error:', uploadErr);
+          alert('Gagal mengupload gambar: ' + uploadErr.message);
+          setUploadingImage(false);
+          return;
+        }
+        setUploadingImage(false);
+      }
+
+      const payload = {
+        name: createFormData.name,
+        price: price,
+        stock: stock,
+        category_id: categoryId,
+        description: createFormData.description || '',
+        image: imageUrl
+      };
+      console.log('➕ [CREATE] Payload:', payload);
+
+      const response = await apiService.createProduct(payload);
+      console.log('➕ [CREATE] Response:', response);
+      
+      // Refresh products list
+      const productsData = await apiService.getProducts();
+      if (productsData && Array.isArray(productsData)) {
+        const mappedProducts = productsData.map(product => ({
+          id: product.id,
+          name: product.name,
+          price: parseFloat(product.price),
+          category: product.category_name || 'Uncategorized',
+          image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
+          stock: product.stock,
+          description: product.description,
+          category_id: product.category_id
+        }));
+        setProducts(mappedProducts);
+      }
+
+      setShowCreateModal(false);
+      setCreateFormData({ name: '', price: '', stock: '', category_id: '', description: '', image: '' });
+      setCreateImagePreview(null);
+      alert('Produk berhasil ditambahkan!');
+    } catch (err) {
+      console.error('Error creating product:', err);
+      alert('Gagal menambahkan produk: ' + (err.message || 'Error'));
+    }
+  };
+
+
   const addToCart = (product) => {
     const existing = cartItems.find((item) => item.id === product.id);
     if (existing) {
@@ -275,7 +508,13 @@ function Dashboard() {
 
       if (response && response.transaction_id) {
         console.log('✅ [Checkout] Checkout success! Transaction ID:', response.transaction_id);
-        alert('✅ Transaksi berhasil! ID Transaksi: ' + response.transaction_id);
+        // Show modal
+        setCheckoutModal({
+          show: true,
+          status: 'success',
+          transactionId: response.transaction_id,
+          message: 'Transaksi Anda telah berhasil diproses!'
+        });
         setCartItems([]); // Clear cart
         setShowCart(false); // Close cart panel
         
@@ -307,11 +546,21 @@ function Dashboard() {
         }
       } else {
         console.error('❌ [Checkout] No transaction_id in response:', response);
-        alert('❌ Checkout gagal: Tidak ada ID transaksi dalam response');
+        setCheckoutModal({
+          show: true,
+          status: 'error',
+          transactionId: null,
+          message: 'Checkout gagal: Tidak ada ID transaksi dalam response'
+        });
       }
     } catch (err) {
       console.error('Checkout error:', err);
-      alert('❌ Checkout gagal: ' + (err.message || 'Kesalahan server'));
+      setCheckoutModal({
+        show: true,
+        status: 'error',
+        transactionId: null,
+        message: 'Checkout gagal: ' + (err.message || 'Kesalahan server')
+      });
     }
   };
 
@@ -320,7 +569,7 @@ function Dashboard() {
   return (
     <div className="dashboard-container">
       <nav className="navbar">
-        <div className="navbar-brand">👕 Endro store Dashboard</div>
+        <div className="navbar-brand">👕 Revandra Shop Dashboard</div>
         <div className="navbar-user">
           <span>Bem-vindo!</span>
           <button className="logout-btn" onClick={handleLogout}>
@@ -350,22 +599,6 @@ function Dashboard() {
                 </button>
               </li>
             )}
-            <li>
-              <button
-                className={`menu-item ${activeTab === 'orders' ? 'active' : ''}`}
-                onClick={() => setActiveTab('orders')}
-              >
-                📋 Pesanan
-              </button>
-            </li>
-            <li>
-              <button
-                className={`menu-item ${activeTab === 'analytics' ? 'active' : ''}`}
-                onClick={() => setActiveTab('analytics')}
-              >
-                📈 Analitik
-              </button>
-            </li>
           </ul>
         </aside>
 
@@ -398,6 +631,14 @@ function Dashboard() {
               <div className="tab-header">
                 <h2>Daftar Produk ({products.length})</h2>
                 <div className="cart-badge-container">
+                  {userRole === 'admin' && (
+                    <button
+                      className="add-product-btn"
+                      onClick={handleOpenCreateModal}
+                    >
+                      ➕ Tambah Produk
+                    </button>
+                  )}
                   <button
                     className="cart-toggle"
                     onClick={() => setShowCart(!showCart)}
@@ -413,6 +654,7 @@ function Dashboard() {
                     <img src={product.image} alt={product.name} className="product-image" />
                     <h3>{product.name}</h3>
                     <p className="category">{product.category}</p>
+                    {product.description && <p className="description">{product.description}</p>}
                     <p className="stock">Stok: {product.stock}</p>
                     <p className="price">Rp {product.price.toLocaleString('id-ID')}</p>
                     <button
@@ -421,6 +663,41 @@ function Dashboard() {
                     >
                       Tambah ke Keranjang
                     </button>
+                    {userRole === 'admin' && (
+                      <div className="admin-actions">
+                        <button
+                          className="edit-btn"
+                          onClick={() => handleEditProduct(product)}
+                          title="Edit Produk"
+                        >
+                          ✎ Edit
+                        </button>
+                        <button
+                          className="edit-desc-btn"
+                          onClick={() => {
+                            setEditingProduct(product);
+                            setEditFormData({
+                              name: product.name,
+                              price: product.price.toString(),
+                              stock: product.stock.toString(),
+                              category_id: product.category_id || '',
+                              description: product.description || ''
+                            });
+                            setShowEditModal(true);
+                          }}
+                          title="Edit Deskripsi"
+                        >
+                          📝 Deskripsi
+                        </button>
+                        <button
+                          className="delete-btn"
+                          onClick={() => handleDeleteProduct(product.id)}
+                          title="Hapus Produk"
+                        >
+                          🗑 Hapus
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -477,19 +754,14 @@ function Dashboard() {
           {/* Sales Tab */}
           {activeTab === 'sales' && (
             <div className="tab-content">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2>📊 Data Penjualan</h2>
+              <div className="sales-header">
+                <div>
+                  <h2>📊 Data Penjualan</h2>
+                  <p className="sales-subtitle">Ringkasan penjualan real-time Anda</p>
+                </div>
                 {userRole === 'admin' && (
                   <button 
-                    style={{
-                      padding: '8px 16px',
-                      backgroundColor: '#4CAF50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
+                    className="refresh-btn"
                     onClick={fetchSalesData}
                   >
                     🔄 Refresh
@@ -498,105 +770,371 @@ function Dashboard() {
               </div>
               
               {userRole !== 'admin' ? (
-                <div style={{ padding: '20px', backgroundColor: '#fee', border: '1px solid #fcc', borderRadius: '4px', color: '#c33', textAlign: 'center' }}>
-                  <p>❌ Akses Ditolak</p>
+                <div className="access-denied-box">
+                  <div className="denied-icon">🔒</div>
+                  <h3>Akses Ditolak</h3>
                   <p>Hanya admin yang dapat melihat data penjualan!</p>
                 </div>
               ) : (
                 <>
-                  <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '4px' }}>
-                    <small>👤 Role: <strong>{userRole}</strong> | 📈 Total Penjualan: <strong>{sales.length}</strong> items</small>
+                  {/* Stats Cards */}
+                  <div className="sales-stats-grid">
+                    <div className="stat-item">
+                      <div className="stat-icon">📦</div>
+                      <div className="stat-info">
+                        <p className="stat-label">Total Penjualan</p>
+                        <p className="stat-number">{sales.length}</p>
+                        <p className="stat-unit">item terjual</p>
+                      </div>
+                    </div>
                   </div>
-                  <table className="sales-table">
-                    <thead>
-                      <tr>
-                        <th>Tanggal</th>
-                        <th>Produk</th>
-                        <th>Qty</th>
-                        <th>Total</th>
-                        <th>Kasir</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sales.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
-                            <div>
-                              <p>📭 Belum ada data penjualan</p>
-                              <small style={{ color: '#666' }}>
-                                Lakukan checkout untuk menambah data
-                              </small>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        sales.map((sale) => (
-                          <tr key={sale.id}>
-                            <td>{sale.date}</td>
-                            <td>{sale.product}</td>
-                            <td style={{ textAlign: 'center' }}>{sale.qty}</td>
-                            <td>Rp {sale.subtotal.toLocaleString('id-ID')}</td>
-                            <td>{sale.kasir || 'N/A'}</td>
+
+                  {/* Sales Table */}
+                  <div className="sales-table-container">
+                    <div className="table-header-info">
+                      <span className="role-badge">👤 Role: <strong>{userRole}</strong></span>
+                      <span className="items-count">📈 Total: <strong>{sales.length}</strong> item</span>
+                    </div>
+                    
+                    {sales.length === 0 ? (
+                      <div className="empty-sales-state">
+                        <div className="empty-icon">📭</div>
+                        <h3>Belum ada data penjualan</h3>
+                        <p>Lakukan checkout untuk menambah data penjualan</p>
+                      </div>
+                    ) : (
+                      <table className="sales-table">
+                        <thead>
+                          <tr>
+                            <th>Tanggal</th>
+                            <th>Produk</th>
+                            <th>Qty</th>
+                            <th>Total</th>
+                            <th>Kasir</th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {sales.map((sale, index) => (
+                            <tr key={sale.id} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
+                              <td><span className="date-badge">{sale.date}</span></td>
+                              <td><strong>{sale.product}</strong></td>
+                              <td><span className="qty-badge">{sale.qty}</span></td>
+                              <td><span className="price-badge">Rp {sale.subtotal.toLocaleString('id-ID')}</span></td>
+                              <td><span className="cashier-badge">{sale.kasir || 'N/A'}</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </>
               )}
             </div>
           )}
 
-          {/* Orders Tab */}
-          {activeTab === 'orders' && (
-            <div className="tab-content">
-              <h2>Pesanan</h2>
-              <div className="orders-grid">
-                <div className="order-card">
-                  <h4>Pesanan #001</h4>
-                  <p>Status: ✅ Selesai</p>
-                  <p>Total: Rp 750.000</p>
-                </div>
-                <div className="order-card">
-                  <h4>Pesanan #002</h4>
-                  <p>Status: 📦 Pengiriman</p>
-                  <p>Total: Rp 1.050.000</p>
-                </div>
-                <div className="order-card">
-                  <h4>Pesanan #003</h4>
-                  <p>Status: ⏳ Pending</p>
-                  <p>Total: Rp 560.000</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Analytics Tab */}
-          {activeTab === 'analytics' && (
-            <div className="tab-content">
-              <h2>Analitik</h2>
-              <div className="analytics-grid">
-                <div className="stat-card">
-                  <h4>Total Penjualan</h4>
-                  <p className="stat-value">Rp 2.360.000</p>
-                </div>
-                <div className="stat-card">
-                  <h4>Total Pesanan</h4>
-                  <p className="stat-value">12</p>
-                </div>
-                <div className="stat-card">
-                  <h4>Produk Terjual</h4>
-                  <p className="stat-value">47</p>
-                </div>
-                <div className="stat-card">
-                  <h4>Rata-rata Order</h4>
-                  <p className="stat-value">Rp 196.667</p>
-                </div>
-              </div>
-            </div>
-          )}
         </main>
       </div>
+
+      {/* Checkout Success/Error Modal */}
+      {checkoutModal.show && (
+        <div className="modal-overlay" onClick={() => setCheckoutModal({ ...checkoutModal, show: false })}>
+          <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`modal-header ${checkoutModal.status}`}>
+              {checkoutModal.status === 'success' ? (
+                <>
+                  <div className="success-icon">✓</div>
+                  <h2>Transaksi Berhasil!</h2>
+                </>
+              ) : (
+                <>
+                  <div className="error-icon">!</div>
+                  <h2>Transaksi Gagal</h2>
+                </>
+              )}
+            </div>
+            
+            <div className="modal-content">
+              <p className="modal-message">{checkoutModal.message}</p>
+              
+              {checkoutModal.status === 'success' && checkoutModal.transactionId && (
+                <div className="transaction-id-box">
+                  <label>ID Transaksi</label>
+                  <div className="transaction-id-display">
+                    <span>{checkoutModal.transactionId}</span>
+                    <button 
+                      className="copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(checkoutModal.transactionId);
+                        alert('ID transaksi disalin!');
+                      }}
+                    >
+                      📋
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className={`modal-btn ${checkoutModal.status}`}
+                onClick={() => setCheckoutModal({ ...checkoutModal, show: false })}
+              >
+                {checkoutModal.status === 'success' ? 'Lanjutkan Belanja' : 'Kembali'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && editingProduct && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header edit">
+              <h2>📝 Edit Produk</h2>
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            
+            <div className="modal-content">
+              <form className="edit-form">
+                <div className="form-group">
+                  <label>Nama Produk</label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    placeholder="Masukkan nama produk"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Harga</label>
+                    <input
+                      type="number"
+                      value={editFormData.price}
+                      onChange={(e) => setEditFormData({ ...editFormData, price: e.target.value })}
+                      placeholder="Masukkan harga"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Stok</label>
+                    <input
+                      type="number"
+                      value={editFormData.stock}
+                      onChange={(e) => setEditFormData({ ...editFormData, stock: e.target.value })}
+                      placeholder="Masukkan stok"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Kategori</label>
+                  <select
+                    value={editFormData.category_id}
+                    onChange={(e) => setEditFormData({ ...editFormData, category_id: e.target.value })}
+                  >
+                    <option value="">-- Pilih Kategori --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Deskripsi</label>
+                  <textarea
+                    value={editFormData.description}
+                    onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                    placeholder="Masukkan deskripsi produk"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Gambar Produk</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setEditFormData({ ...editFormData, image: file });
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          setEditImagePreview(event.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    placeholder="Pilih gambar produk"
+                  />
+                </div>
+
+                {editImagePreview && (
+                  <div className="form-group">
+                    <label>Preview Gambar Baru</label>
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px' }}>
+                      <img 
+                        src={editImagePreview} 
+                        alt="Preview" 
+                        style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {editingProduct && editingProduct.image && !editImagePreview && (
+                  <div className="form-group">
+                    <label>Gambar Saat Ini</label>
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px' }}>
+                      <img 
+                        src={editingProduct.image} 
+                        alt="Current" 
+                        style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="modal-btn cancel"
+                onClick={() => setShowEditModal(false)}
+              >
+                Batal
+              </button>
+              <button 
+                className="modal-btn save"
+                onClick={handleUpdateProduct}
+              >
+                Simpan Perubahan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Product Modal */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header edit">
+              <h2>➕ Tambah Produk Baru</h2>
+              <button className="close-btn" onClick={() => setShowCreateModal(false)}>✕</button>
+            </div>
+            
+            <div className="modal-content">
+              <form className="edit-form">
+                <div className="form-group">
+                  <label>Nama Produk</label>
+                  <input
+                    type="text"
+                    value={createFormData.name}
+                    onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
+                    placeholder="Masukkan nama produk"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Harga</label>
+                    <input
+                      type="number"
+                      value={createFormData.price}
+                      onChange={(e) => setCreateFormData({ ...createFormData, price: e.target.value })}
+                      placeholder="Masukkan harga"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Stok</label>
+                    <input
+                      type="number"
+                      value={createFormData.stock}
+                      onChange={(e) => setCreateFormData({ ...createFormData, stock: e.target.value })}
+                      placeholder="Masukkan stok"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Kategori</label>
+                  <select
+                    value={createFormData.category_id}
+                    onChange={(e) => setCreateFormData({ ...createFormData, category_id: e.target.value })}
+                  >
+                    <option value="">-- Pilih Kategori --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Deskripsi</label>
+                  <textarea
+                    value={createFormData.description}
+                    onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
+                    placeholder="Masukkan deskripsi produk"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Gambar Produk</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setCreateFormData({ ...createFormData, image: file });
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          setCreateImagePreview(event.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    placeholder="Pilih gambar produk"
+                  />
+                </div>
+
+                {createImagePreview && (
+                  <div className="form-group">
+                    <label>Preview Gambar</label>
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px' }}>
+                      <img 
+                        src={createImagePreview} 
+                        alt="Preview" 
+                        style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="modal-btn cancel"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Batal
+              </button>
+              <button 
+                className="modal-btn save"
+                onClick={handleCreateProduct}
+              >
+                Tambahkan Produk
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

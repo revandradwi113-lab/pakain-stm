@@ -43,7 +43,7 @@ const setupDatabase = async () => {
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
         description TEXT,
-        price DECIMAL(10, 2) NOT NULL,
+        price DECIMAL(15, 2) NOT NULL,
         stock INT DEFAULT 0,
         category_id INT REFERENCES categories(id),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
