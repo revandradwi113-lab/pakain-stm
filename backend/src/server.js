@@ -24,12 +24,17 @@ const allowedOrigins = [
   "http://localhost:3000/",
   "http://localhost:3001/",
   "https://pakain-stm-vfv4.vercel.app",
-  "https://pakain-stm-vfv4.vercel.app/"
+  "https://pakain-stm-vfv4.vercel.app/",
+  "https://pakain-stm-vfv4-hdk3xf7a6-revandradwi113-labs-projects.vercel.app",
+  "https://pakain-stm-vfv4-hdk3xf7a6-revandradwi113-labs-projects.vercel.app/"
 ];
 
 // Add Vercel frontend domain if available
 if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
+  if (!process.env.FRONTEND_URL.endsWith('/')) {
+    allowedOrigins.push(process.env.FRONTEND_URL + '/');
+  }
 }
 
 // For development, allow all origins if needed
