@@ -14,6 +14,9 @@ const API_URL = process.env.NODE_ENV === 'production'
   ? (process.env.REACT_APP_API_URL || 'https://pakain-stm-gci1.vercel.app')
   : 'http://localhost:5000';
 
+console.log('🔗 [API] Base URL:', API_URL);
+console.log('🔗 [API] Environment:', process.env.NODE_ENV);
+
 /**
  * parseJsonResponse - Helper function untuk safely parse JSON response
  * Menangani response yang bukan JSON format dengan error handling
@@ -50,7 +53,10 @@ const apiService = {
    */
   login: async (email, password) => {
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const url = `${API_URL}/auth/login`;
+      console.log('🔐 [LOGIN] Attempting login to:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,14 +64,19 @@ const apiService = {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log('🔐 [LOGIN] Response status:', response.status);
+
       if (!response.ok) {
         const error = await parseJsonResponse(response);
-        throw new Error(error.message || 'Login gagal');
+        console.error('🔐 [LOGIN] Server error:', error);
+        throw new Error(error.message || `Login gagal (${response.status})`);
       }
 
       const data = await parseJsonResponse(response);
+      console.log('✅ [LOGIN] Success!');
       return data;
     } catch (error) {
+      console.error('❌ [LOGIN] Error:', error.message);
       throw error;
     }
   },
