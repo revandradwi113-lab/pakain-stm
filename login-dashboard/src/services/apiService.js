@@ -11,7 +11,7 @@
 
 // Determine API URL based on environment
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? (process.env.REACT_APP_API_URL || 'https://pakain-stm-gci1.vercel.app')
+  ? (process.env.REACT_APP_API_URL || 'https://pakain-stm-zslq.vercel.app')
   : 'http://localhost:5000';
 
 console.log('🔗 [API] Base URL:', API_URL);
