@@ -16,8 +16,35 @@ const port = process.env.PORT || 5000;
 
 // 4️⃣ Middleware bawaan Express untuk parsing JSON dan CORS
 console.log('⏳ [STARTUP] Setting up middleware...');
+
+// Determine allowed origins based on environment
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3000/",
+  "http://localhost:3001/"
+];
+
+// Add Vercel frontend domain if available
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+// For development, allow all origins if needed
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔓 [CORS] Development mode - allowing localhost origins');
+}
+
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:3001"],
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -59,8 +86,8 @@ console.log('✅ [STARTUP] Swagger documentation loaded');
 console.log('⏳ [STARTUP] Testing database connection...');
 pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error('❌ [DB] Database connection failed:', err.message);
-    process.exit(1);
+    console.warn('⚠️  [DB] Database connection failed (will retry):', err.message);
+    // Don't exit - server will continue and retry connections on demand
   } else {
     console.log('✅ [DB] Database connected successfully');
   }

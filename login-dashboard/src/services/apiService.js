@@ -3,11 +3,16 @@
  * Menangani semua komunikasi dengan backend API
  * Fitur: Login, Register, Token Management, Fetch Products/Categories/Transactions
  * 
- * Base URL: http://localhost:5000
+ * Base URL: 
+ * - Development: http://localhost:5000
+ * - Production: https://your-vercel-domain.vercel.app
  * Auth: Menggunakan JWT Bearer Token
  */
 
-const API_URL = 'http://localhost:5000';
+// Determine API URL based on environment
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? (process.env.REACT_APP_API_URL || window.location.origin)
+  : 'http://localhost:5000';
 
 /**
  * parseJsonResponse - Helper function untuk safely parse JSON response
