@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 import apiService from './services/apiService';
@@ -22,6 +22,7 @@ function Dashboard() {
   const [createFormData, setCreateFormData] = useState({ name: '', price: '', stock: '', category_id: '', description: '', image: '' });
   const [createImagePreview, setCreateImagePreview] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const handleLogout = () => {
@@ -30,83 +31,18 @@ function Dashboard() {
     navigate('/');
   };
 
-  // Map product names to image files
-  const imageMap = {
+  // Map product names to image files - memoized to prevent unnecessary re-renders
+  const imageMap = useMemo(() => ({
     'Kaos Polos Putih': 'Kaos Polos Putih.png',
     'Kaos Polos Hitam': 'Kaos Polos Hitam.png',
     'Kaos anak hebat': 'Kaos anak hebat.png',
     'Celana Jeans Slim Fit': 'Celana Jeans Slim Fit.png',
     'Ikat Pinggang Kulit': 'Ikat Pinggang Kulit.png',
     'jaket outdor': 'jaket outdor.png'
-  };
+  }), []);
 
-  // Fetch products and sales data
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('token');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        
-        if (!token) {
-          navigate('/');
-          return;
-        }
-
-        // Set user role
-        if (user && user.role) {
-          setUserRole(user.role);
-        }
-
-        // Fetch categories
-        try {
-          const categoriesData = await apiService.getCategories();
-          if (categoriesData && Array.isArray(categoriesData)) {
-            setCategories(categoriesData);
-          }
-        } catch (err) {
-          console.warn('Gagal mengambil kategori:', err);
-        }
-
-        // Fetch products (untuk semua role)
-        const productsData = await apiService.getProducts();
-        if (productsData && Array.isArray(productsData)) {
-          const mappedProducts = productsData.map(product => ({
-            id: product.id,
-            name: product.name,
-            price: parseFloat(product.price),
-            category: product.category_name || 'Uncategorized',
-            image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
-            stock: product.stock,
-            description: product.description,
-            category_id: product.category_id
-          }));
-          setProducts(mappedProducts);
-        }
-
-        // Fetch transactions only untuk admin
-        if (user && user.role === 'admin') {
-          await fetchSalesData();
-        } else {
-          setSales([]); // Clear sales untuk non-admin
-        }
-
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Gagal memuat data dari server');
-        setProducts([]);
-        setSales([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAllData();
-  }, [navigate]);
-
-  // Fetch and transform sales data from transactions
-  const fetchSalesData = async () => {
+  // Fetch and transform sales data from transactions - wrapped in useCallback
+  const fetchSalesData = useCallback(async () => {
     try {
       console.log('📊 [fetchSalesData] Starting...');
       console.log('📊 [fetchSalesData] User role:', userRole);
@@ -179,7 +115,72 @@ function Dashboard() {
       console.error('❌ [fetchSalesData] Full error:', err);
       setSales([]);
     }
-  };
+  }, [userRole]);
+
+  // Fetch products and sales data
+  useEffect(() => {
+    const fetchAllData = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) {
+          navigate('/');
+          return;
+        }
+
+        // Set user role
+        if (user && user.role) {
+          setUserRole(user.role);
+        }
+
+        // Fetch categories
+        try {
+          const categoriesData = await apiService.getCategories();
+          if (categoriesData && Array.isArray(categoriesData)) {
+            setCategories(categoriesData);
+          }
+        } catch (err) {
+          console.warn('Gagal mengambil kategori:', err);
+        }
+
+        // Fetch products (untuk semua role)
+        const productsData = await apiService.getProducts();
+        if (productsData && Array.isArray(productsData)) {
+          const mappedProducts = productsData.map(product => ({
+            id: product.id,
+            name: product.name,
+            price: parseFloat(product.price),
+            category: product.category_name || 'Uncategorized',
+            image: product.image ? `http://localhost:5000${product.image}` : `/${imageMap[product.name] || product.name + '.png'}`,
+            stock: product.stock,
+            description: product.description,
+            category_id: product.category_id
+          }));
+          setProducts(mappedProducts);
+        }
+
+        // Fetch transactions only untuk admin
+        if (user && user.role === 'admin') {
+          await fetchSalesData();
+        } else {
+          setSales([]); // Clear sales untuk non-admin
+        }
+
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Gagal memuat data dari server');
+        setProducts([]);
+        setSales([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, [navigate, fetchSalesData, imageMap]);
 
   // Old hardcoded products - replaced by API fetch above
   /* Commented out - now fetched from API
