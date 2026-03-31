@@ -22,7 +22,9 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3000/",
-  "http://localhost:3001/"
+  "http://localhost:3001/",
+  "https://pakain-stm-vfv4.vercel.app",
+  "https://pakain-stm-vfv4.vercel.app/"
 ];
 
 // Add Vercel frontend domain if available
